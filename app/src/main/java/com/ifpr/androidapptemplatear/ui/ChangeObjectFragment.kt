@@ -1,3 +1,4 @@
+
 package com.ifpr.androidapptemplatear.ui
 
 import android.graphics.Color
@@ -45,16 +46,22 @@ class ChangeObjectFragment : Fragment() {
         carregarModelos()
     }
 
-    /**
-     * Procura automaticamente todos os arquivos .glb
-     * existentes na pasta assets.
-     */
     private fun carregarModelos() {
+        val container = view?.findViewById<LinearLayout>(
+            R.id.categoryContainer
+        ) ?: return
 
-        val container =
-            view?.findViewById<LinearLayout>(R.id.categoryContainer)
+        container.removeAllViews()
 
-        container?.removeAllViews()
+        val collectionButton = Button(requireContext()).apply {
+            text = "🐉 MINHA COLEÇÃO"
+
+            setOnClickListener {
+                findNavController().navigate(R.id.navigation_collection)
+            }
+        }
+
+        container.addView(collectionButton)
 
         val modelos = requireContext()
             .assets
@@ -71,7 +78,6 @@ class ChangeObjectFragment : Fragment() {
                 "Nenhum modelo 3D encontrado.",
                 Toast.LENGTH_LONG
             ).show()
-
             return
         }
 
@@ -82,55 +88,27 @@ class ChangeObjectFragment : Fragment() {
         }
     }
 
-    /**
-     * Adiciona o título da lista de modelos.
-     */
     private fun adicionarTitulo(container: LinearLayout?) {
-
         val titulo = TextView(requireContext()).apply {
-
             text = "Modelos 3D"
 
-            setTextSize(
-                TypedValue.COMPLEX_UNIT_SP,
-                20f
-            )
-
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
             setTypeface(null, Typeface.BOLD)
-
             setTextColor(Color.BLACK)
-
-            setPadding(
-                0,
-                24,
-                0,
-                16
-            )
+            setPadding(0, 24, 0, 16)
         }
 
         container?.addView(titulo)
     }
 
-    /**
-     * Cria um item da lista para cada modelo encontrado.
-     */
     private fun adicionarModelo(
         container: LinearLayout?,
         arquivo: String
     ) {
-
         val itemLayout = LinearLayout(requireContext()).apply {
-
             orientation = LinearLayout.HORIZONTAL
-
             gravity = Gravity.CENTER_VERTICAL
-
-            setPadding(
-                0,
-                12,
-                0,
-                12
-            )
+            setPadding(0, 12, 0, 12)
 
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -138,35 +116,17 @@ class ChangeObjectFragment : Fragment() {
             )
         }
 
-        /*
-         * Remove a extensão .glb e deixa o nome
-         * mais amigável para exibição.
-         *
-         * Exemplo:
-         * pikachu.glb -> Pikachu
-         * cadeira_escolar.glb -> Cadeira escolar
-         */
         val nomeModelo = arquivo
             .removeSuffix(".glb")
             .removeSuffix(".GLB")
             .replace("_", " ")
             .replaceFirstChar {
-                if (it.isLowerCase()) {
-                    it.titlecase()
-                } else {
-                    it.toString()
-                }
+                if (it.isLowerCase()) it.titlecase() else it.toString()
             }
 
         val nome = TextView(requireContext()).apply {
-
             text = nomeModelo
-
-            setTextSize(
-                TypedValue.COMPLEX_UNIT_SP,
-                17f
-            )
-
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f)
             setTextColor(Color.DKGRAY)
 
             layoutParams = LinearLayout.LayoutParams(
@@ -177,48 +137,27 @@ class ChangeObjectFragment : Fragment() {
         }
 
         val botao = Button(requireContext()).apply {
-
             text = "Exibir"
 
             setOnClickListener {
-
-                /*
-                 * Informa para a tela da câmera
-                 * qual modelo deve ser carregado.
-                 */
                 sharedViewModel.selectModel(arquivo)
-
-                /*
-                 * Abre a tela de Realidade Aumentada.
-                 */
-                findNavController().navigate(
-                    R.id.navigation_camera
-                )
+                findNavController().navigate(R.id.navigation_camera)
             }
         }
 
         itemLayout.addView(nome)
         itemLayout.addView(botao)
-
         container?.addView(itemLayout)
 
         adicionarDivisor(container)
     }
 
-    /**
-     * Adiciona uma linha separando os modelos.
-     */
-    private fun adicionarDivisor(
-        container: LinearLayout?
-    ) {
-
+    private fun adicionarDivisor(container: LinearLayout?) {
         val divisor = View(requireContext()).apply {
-
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 1
             ).apply {
-
                 topMargin = 4
                 bottomMargin = 4
             }

@@ -1,5 +1,7 @@
+
 package com.ifpr.androidapptemplatear
 
+import android.media.MediaPlayer
 import android.os.Bundle
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import androidx.appcompat.app.AppCompatActivity
@@ -11,6 +13,7 @@ import com.ifpr.androidapptemplatear.databinding.ActivityMainBinding
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
+    private var mediaPlayer: MediaPlayer? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -18,18 +21,40 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        // Música de fundo do Dragon Sakura
+        mediaPlayer = MediaPlayer.create(this, R.raw.samurai)
+
+        mediaPlayer?.apply {
+            isLooping = true
+            start()
+        }
+
         val navView: BottomNavigationView = binding.navView
 
-        val navController = findNavController(R.id.nav_host_fragment_activity_main)
-        // Passing each menu ID as a set of Ids because each
-        // menu should be considered as top level destinations.
+        val navController =
+            findNavController(R.id.nav_host_fragment_activity_main)
+
         val appBarConfiguration = AppBarConfiguration(
             setOf(
-                R.id.navigation_camera, R.id.navigation_changeobject
-                //, R.id.navigation_profile
+                R.id.navigation_camera,
+                R.id.navigation_changeobject
+                // R.id.navigation_profile
             )
         )
-        //setupActionBarWithNavController(navController, appBarConfiguration)
+
         navView.setupWithNavController(navController)
+    }
+
+    override fun onDestroy() {
+        mediaPlayer?.let { player ->
+            if (player.isPlaying) {
+                player.stop()
+            }
+            player.release()
+        }
+
+        mediaPlayer = null
+
+        super.onDestroy()
     }
 }
