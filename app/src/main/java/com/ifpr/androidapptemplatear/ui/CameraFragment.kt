@@ -62,6 +62,8 @@ class CameraFragment : Fragment() {
         private const val CAMERA_TIMEOUT_MS = 8000L
     }
 
+    private val localizacaoController = LocalizacaoController(this)
+
     private var mode = Mode.CHECKING
 
     private var container: FrameLayout? = null
@@ -174,6 +176,20 @@ class CameraFragment : Fragment() {
         }
 
         checkAvailability()
+
+        val parent = container?.parent as? ViewGroup
+        if (parent != null) {
+            localizacaoController.conectar(parent) { arquivo ->
+                if (!sharedViewModel.jogoEncerrado) {
+                    sharedViewModel.selectModel(arquivo)
+                }
+            }
+            placeButton?.bringToFront()
+            captureButton?.bringToFront()
+            parent.findViewById<View>(R.id.titleImage)?.bringToFront()
+            parent.findViewById<View>(R.id.textVidas)?.bringToFront()
+            parent.findViewById<View>(R.id.textRegra)?.bringToFront()
+        }
     }
 
     private fun createControls() {
