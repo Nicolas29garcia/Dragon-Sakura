@@ -45,7 +45,7 @@ class MainActivity : AppCompatActivity() {
         navView.setupWithNavController(navController)
     }
 
-    override fun onDestroy() {
+    fun pararSomDaPartida() {
         mediaPlayer?.let { player ->
             if (player.isPlaying) {
                 player.stop()
@@ -54,7 +54,10 @@ class MainActivity : AppCompatActivity() {
         }
 
         mediaPlayer = null
+    }
 
+    override fun onDestroy() {
+        pararSomDaPartida()
         super.onDestroy()
     }
 }

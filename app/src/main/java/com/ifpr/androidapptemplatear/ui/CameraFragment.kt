@@ -1,6 +1,8 @@
 package com.ifpr.androidapptemplatear.ui
 
 import android.Manifest
+import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.net.Uri
@@ -14,6 +16,7 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.Preview
@@ -31,6 +34,7 @@ import com.google.ar.core.HitResult
 import com.google.ar.core.Plane
 import com.google.ar.core.TrackingState
 import com.ifpr.androidapptemplatear.R
+import com.ifpr.androidapptemplatear.MainActivity
 import io.github.sceneview.SceneView
 import io.github.sceneview.ar.ARSceneView
 import io.github.sceneview.ar.node.AnchorNode
@@ -62,6 +66,7 @@ class CameraFragment : Fragment() {
 
     private var container: FrameLayout? = null
     private var placeButton: ExtendedFloatingActionButton? = null
+    private var captureButton: ExtendedFloatingActionButton? = null
     private var statusText: TextView? = null
     private var overlay: View? = null
 
@@ -87,7 +92,7 @@ class CameraFragment : Fragment() {
     private var arTracking = false
     private var cameraStreaming = false
 
-    private var currentModelFile = "neutrofilo.glb"
+    private var currentModelFile = "dragao.glb"
 
     private lateinit var sharedViewModel: SharedModelViewModel
 
@@ -95,7 +100,7 @@ class CameraFragment : Fragment() {
         registerForActivityResult(
             ActivityResultContracts.RequestPermission()
         ) { granted ->
-            if (container != null) {
+            if (container != null && !sharedViewModel.jogoEncerrado) {
                 when {
                     !granted -> startPreview(useCamera = false)
                     pendingAr -> startAr()
@@ -124,6 +129,7 @@ class CameraFragment : Fragment() {
 
         container = view.findViewById(R.id.sceneContainer)
         placeButton = view.findViewById(R.id.place)
+        captureButton = view.findViewById(R.id.capture)
 
         createControls()
 
@@ -131,6 +137,12 @@ class CameraFragment : Fragment() {
             ViewModelProvider(requireActivity())[
                 SharedModelViewModel::class.java
             ]
+
+        val textoVidas = view.findViewById<TextView>(R.id.textVidas)
+        sharedViewModel.vidas.observe(viewLifecycleOwner) { vidas ->
+            textoVidas.text = "Vidas: $vidas"
+        }
+        captureButton?.setOnClickListener { captureDragon() }
 
         val selectedModel = sharedViewModel.selectedModel.value
 
@@ -141,13 +153,14 @@ class CameraFragment : Fragment() {
         }
 
         sharedViewModel.selectedModel.observe(viewLifecycleOwner) { path ->
-            if (!path.isNullOrBlank() && path != currentModelFile) {
+            if (!sharedViewModel.jogoEncerrado && !path.isNullOrBlank() && path != currentModelFile) {
                 currentModelFile = path
                 loadModel()
             }
         }
 
         placeButton?.setOnClickListener {
+            if (sharedViewModel.jogoEncerrado) return@setOnClickListener
             when (mode) {
                 Mode.AR -> placeModel()
 
@@ -191,7 +204,7 @@ class CameraFragment : Fragment() {
             ).apply {
                 leftMargin = dp(12)
                 rightMargin = dp(12)
-                bottomMargin = dp(85)
+                bottomMargin = dp(180)
             }
         )
 
@@ -207,6 +220,9 @@ class CameraFragment : Fragment() {
 
         parent.findViewById<View>(R.id.titleImage)?.bringToFront()
         placeButton?.bringToFront()
+        captureButton?.bringToFront()
+        parent.findViewById<View>(R.id.textVidas)?.bringToFront()
+        parent.findViewById<View>(R.id.textRegra)?.bringToFront()
     }
 
     /**
@@ -228,6 +244,7 @@ class CameraFragment : Fragment() {
     }
 
     private fun checkAvailability() {
+        if (sharedViewModel.jogoEncerrado) return
         availabilityJob?.cancel()
 
         // Não tenta iniciar ARCore no emulador.
@@ -289,6 +306,7 @@ class CameraFragment : Fragment() {
     }
 
     private fun requestMode(useAr: Boolean) {
+        if (sharedViewModel.jogoEncerrado) return
         pendingAr = useAr
 
         val permitted = ContextCompat.checkSelfPermission(
@@ -308,6 +326,7 @@ class CameraFragment : Fragment() {
     }
 
     private fun startAr() {
+        if (sharedViewModel.jogoEncerrado) return
         val host = container ?: return
 
         clearScene()
@@ -452,6 +471,7 @@ class CameraFragment : Fragment() {
     }
 
     private fun startPreview(useCamera: Boolean) {
+        if (sharedViewModel.jogoEncerrado) return
         val host = container ?: return
 
         clearScene()
@@ -632,6 +652,7 @@ class CameraFragment : Fragment() {
     }
 
     private fun loadModel() {
+        if (sharedViewModel.jogoEncerrado) return
         val scene = sceneView ?: return
         val location = modelLocation(currentModelFile)
 
@@ -683,6 +704,7 @@ class CameraFragment : Fragment() {
                 if (!isAr) {
                     scene.addChildNode(node)
                     placeButton?.isEnabled = true
+                    captureButton?.isEnabled = true
                 }
 
             } catch (e: CancellationException) {
@@ -700,6 +722,7 @@ class CameraFragment : Fragment() {
     }
 
     private fun placeModel() {
+        if (sharedViewModel.jogoEncerrado) return
         val ar = arView ?: return
 
         if (anchorNode != null) {
@@ -721,6 +744,7 @@ class CameraFragment : Fragment() {
 
             anchorNode = anchor
             placementHit = null
+            captureButton?.isEnabled = true
 
             placeButton?.apply {
                 text = "Reposicionar"
@@ -733,6 +757,66 @@ class CameraFragment : Fragment() {
             statusText?.text =
                 "Não foi possível posicionar. Tente outra superfície."
         }
+    }
+
+    private fun captureDragon() {
+        if (sharedViewModel.jogoEncerrado || modelNode == null) return
+        if (mode == Mode.AR && anchorNode == null) return
+
+        val normalizedName = currentModelFile.substringAfterLast("/").substringBefore("?").lowercase()
+        val isDragon = normalizedName.contains("dragao") || normalizedName.contains("dragon")
+
+        if (!isDragon) {
+            perderVida()
+            return
+        }
+
+        val preferences = requireContext().getSharedPreferences(
+            "dragon_sakura_collection", Context.MODE_PRIVATE
+        )
+        val capturedModels = preferences
+            .getStringSet("captured_models", emptySet<String>())
+            .orEmpty().toMutableSet()
+
+        if (!capturedModels.add(currentModelFile)) {
+            Toast.makeText(requireContext(), "Este dragão já está na sua coleção!", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        preferences.edit().putStringSet("captured_models", capturedModels).apply()
+        Toast.makeText(requireContext(), "Dragão capturado! Ele foi adicionado ao seu bestiário.", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun perderVida() {
+        if (!sharedViewModel.perderVida(SystemClock.elapsedRealtime())) return
+        if (sharedViewModel.vidas.value == 0) {
+            encerrarJogo("Suas vidas acabaram.")
+        } else {
+            Toast.makeText(requireContext(), "Objeto incorreto! Você perdeu uma vida.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun encerrarJogo(motivo: String) {
+        if (!sharedViewModel.encerrarJogo()) return
+
+        placeButton?.isEnabled = false
+        captureButton?.isEnabled = false
+        availabilityJob?.cancel()
+        availabilityJob = null
+        modelNode?.isEditable = false
+        (activity as? MainActivity)?.pararSomDaPartida()
+
+        // Invalida callbacks pendentes e cancela o carregamento antes de finalizar.
+        generation++
+        modelGeneration++
+        loadJob?.cancel()
+        arWatchdogJob?.cancel()
+        cameraWatchdogJob?.cancel()
+
+        val tela = Intent(requireContext(), GameOverActivity::class.java)
+        tela.putExtra("motivo", motivo)
+        startActivity(tela)
+        requireActivity().finish()
     }
 
     private fun modelLocation(fileName: String): String? {
@@ -755,6 +839,7 @@ class CameraFragment : Fragment() {
     }
 
     private fun removeModel() {
+        captureButton?.isEnabled = false
         val scene = sceneView
 
         modelNode?.let { model ->
@@ -845,6 +930,7 @@ class CameraFragment : Fragment() {
         overlay = null
         statusText = null
         placeButton = null
+        captureButton = null
         container = null
 
         pendingAr = false
