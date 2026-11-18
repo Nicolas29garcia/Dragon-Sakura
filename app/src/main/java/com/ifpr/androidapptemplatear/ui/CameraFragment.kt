@@ -144,6 +144,10 @@ class CameraFragment : Fragment() {
         sharedViewModel.vidas.observe(viewLifecycleOwner) { vidas ->
             textoVidas.text = "Vidas: $vidas"
         }
+        val textoPontos = view.findViewById<TextView>(R.id.textPontuacao)
+        sharedViewModel.pontuacao.observe(viewLifecycleOwner) { pontos ->
+            textoPontos.text = "Pontos: $pontos"
+        }
         captureButton?.setOnClickListener { captureDragon() }
 
         val selectedModel = sharedViewModel.selectedModel.value
@@ -182,6 +186,7 @@ class CameraFragment : Fragment() {
             localizacaoController.conectar(parent) { arquivo ->
                 if (!sharedViewModel.jogoEncerrado) {
                     sharedViewModel.selectModel(arquivo)
+                    sharedViewModel.registrarEncontro(arquivo)
                 }
             }
             placeButton?.bringToFront()
@@ -189,6 +194,7 @@ class CameraFragment : Fragment() {
             parent.findViewById<View>(R.id.titleImage)?.bringToFront()
             parent.findViewById<View>(R.id.textVidas)?.bringToFront()
             parent.findViewById<View>(R.id.textRegra)?.bringToFront()
+            textoPontos.bringToFront()
         }
     }
 
@@ -820,6 +826,7 @@ class CameraFragment : Fragment() {
         availabilityJob?.cancel()
         availabilityJob = null
         modelNode?.isEditable = false
+        localizacaoController.encerrarPartida()
         (activity as? MainActivity)?.pararSomDaPartida()
 
         // Invalida callbacks pendentes e cancela o carregamento antes de finalizar.

@@ -61,8 +61,8 @@ class LocalizacaoController(
     private val lugares = listOf(
         // Catedral Sant'Ana
         Lugar(
-            latitude = -25.097922,
-            longitude = -50.159264
+            latitude = -25.09821,
+            longitude = -50.15895
         ),
 
         // Igreja dos Polacos
@@ -75,7 +75,13 @@ class LocalizacaoController(
         Lugar(
             latitude = -25.246243,
             longitude = -50.021782
-        )
+        ),
+
+        // Estação Saudade (OpenStreetMap 4287261390)
+        Lugar(latitude = -25.09338, longitude = -50.15326),
+
+        // Estação Paraná / Casa da Memória (OpenStreetMap 546721749)
+        Lugar(latitude = -25.09567, longitude = -50.15552)
     )
 
     private var manager: LocationManager? = null
@@ -91,6 +97,7 @@ class LocalizacaoController(
     private var lugarAtual: Lugar? = null
 
     private var monitorando = false
+    private var partidaEncerrada = false
     private var enderecoAtual: String? = null
 
     private var enderecoJob: Job? = null
@@ -207,13 +214,13 @@ class LocalizacaoController(
                 rightMargin = dp(12)
 
                 // Ajuste para posicionar abaixo do logotipo.
-                topMargin = dp(170)
+                topMargin = dp(8)
             }
         )
 
         val parametros = if (parent is ConstraintLayout) {
             ConstraintLayout.LayoutParams(0, 0).apply {
-                topToTop = ConstraintLayout.LayoutParams.PARENT_ID
+                topToBottom = R.id.textPontuacao
                 bottomToBottom = ConstraintLayout.LayoutParams.PARENT_ID
                 startToStart = ConstraintLayout.LayoutParams.PARENT_ID
                 endToEnd = ConstraintLayout.LayoutParams.PARENT_ID
@@ -275,7 +282,7 @@ class LocalizacaoController(
 
     @SuppressLint("MissingPermission")
     private fun iniciar() {
-        if (monitorando) return
+        if (monitorando || partidaEncerrada) return
 
         if (!temPermissaoPrecisa()) {
             mostrarAcao(
@@ -339,6 +346,12 @@ class LocalizacaoController(
                 textoBotao = "Tentar novamente"
             )
         }
+    }
+
+    fun encerrarPartida() {
+        partidaEncerrada = true
+        parar()
+        botao?.isEnabled = false
     }
 
     private fun parar() {

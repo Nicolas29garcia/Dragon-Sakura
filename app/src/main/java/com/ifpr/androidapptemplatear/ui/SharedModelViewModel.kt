@@ -15,6 +15,22 @@ class SharedModelViewModel : ViewModel() {
 
     private var ultimoDano: Long? = null
 
+    private val _pontuacao = MutableLiveData(0)
+    val pontuacao: LiveData<Int> = _pontuacao
+    private val modelosEncontrados = mutableSetOf<String>()
+
+    fun registrarEncontro(arquivo: String) {
+        if (jogoEncerrado) return
+        if (modelosEncontrados.add(arquivo)) {
+            _pontuacao.value = (_pontuacao.value ?: 0) + 10
+        }
+    }
+
+    fun reiniciarPontuacao() {
+        modelosEncontrados.clear()
+        _pontuacao.value = 0
+    }
+
     fun perderVida(agora: Long): Boolean {
         if (jogoEncerrado || (_vidas.value ?: 0) == 0) return false
         val anterior = ultimoDano
