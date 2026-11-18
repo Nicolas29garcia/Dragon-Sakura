@@ -35,12 +35,12 @@ class SharedModelViewModel : ViewModel() {
         registrarEncontro(arquivo)
     }
 
-    fun atacarDragao(arquivo: String): Boolean {
+    fun atacarDragao(arquivo: String, damage: Int = SakuraRules.DAMAGE): Boolean {
         if (jogoEncerrado || selectedModel.value != arquivo ||
             SakuraRules.profile(arquivo) == null || foiCapturado(arquivo)) return false
         val hp = _dragonHp.value ?: 0
         if (hp <= 0) return false
-        _dragonHp.value = SakuraRules.remainingHp(hp)
+        _dragonHp.value = (hp - damage.coerceIn(25, 50)).coerceAtLeast(0)
         return true
     }
 

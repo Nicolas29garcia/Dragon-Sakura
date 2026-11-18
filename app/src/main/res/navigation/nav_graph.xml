@@ -21,8 +21,7 @@
     <fragment
         android:id="@+id/navigation_profile"
         android:name="com.ifpr.androidapptemplatear.ui.ProfileFragment"
-        android:label="@string/profile"
-        tools:layout="@layout/fragment_profile" />
+        android:label="Santuário Sakura" />
 
     <fragment
         android:id="@+id/navigation_collection"

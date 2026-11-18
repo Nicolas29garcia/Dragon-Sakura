@@ -62,6 +62,10 @@ class ChangeObjectFragment : Fragment() {
         }
 
         container.addView(collectionButton)
+        container.addView(Button(requireContext()).apply {
+            text = "LOJA • PERFIL • MISSÕES"
+            setOnClickListener { findNavController().navigate(R.id.navigation_profile) }
+        })
 
         val modelos = requireContext()
             .assets

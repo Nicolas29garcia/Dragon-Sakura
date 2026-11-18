@@ -148,6 +148,7 @@ class CameraFragment : Fragment() {
                 SharedModelViewModel::class.java
             ]
 
+        val progress = SakuraProgress(requireContext())
         val textoVidas = view.findViewById<TextView>(R.id.textVidas)
         sharedViewModel.vidas.observe(viewLifecycleOwner) { vidas ->
             textoVidas.text = "Vidas: $vidas"
@@ -155,6 +156,7 @@ class CameraFragment : Fragment() {
         val textoPontos = view.findViewById<TextView>(R.id.textPontuacao)
         sharedViewModel.pontuacao.observe(viewLifecycleOwner) { pontos ->
             textoPontos.text = "Pontos: $pontos"
+            progress.updateRecord(pontos)
         }
         captureButton?.setOnClickListener { captureDragon() }
         attackButton?.setOnClickListener { attackDragon() }
@@ -199,7 +201,10 @@ class CameraFragment : Fragment() {
             localizacaoController.conectar(parent) { arquivo, portal ->
                 if (!sharedViewModel.jogoEncerrado) {
                     cancelAttack()
+                    val before = sharedViewModel.pontuacao.value ?: 0
                     sharedViewModel.iniciarEncontro(arquivo, portal)
+                    progress.rewardEncounter((sharedViewModel.pontuacao.value ?: 0) - before)
+                    progress.portal(portal)
                     updateBattleControls()
                     Toast.makeText(requireContext(), "$portal: novo encontro!", Toast.LENGTH_SHORT).show()
                 }
@@ -698,7 +703,7 @@ class CameraFragment : Fragment() {
     private fun loadModel() {
         if (sharedViewModel.jogoEncerrado) return
         val scene = sceneView ?: return
-        val location = modelLocation(currentModelFile)
+        val location = modelLocation(SakuraRules.assetFile(currentModelFile))
 
         if (location == null) {
             statusText?.text =
@@ -715,13 +720,18 @@ class CameraFragment : Fragment() {
         val expectedModel = ++modelGeneration
         val isAr = mode == Mode.AR
         val fileName = currentModelFile
+        val appContext = requireContext().applicationContext
+        val skinColor = if (fileName == SakuraRules.BOSS) 0xFF713D9E.toInt() else if (SakuraRules.profile(fileName) != null) SakuraProgress(appContext).equipped(false).color else 0
 
         placeButton?.isEnabled = false
 
         loadJob = viewLifecycleOwner.lifecycleScope.launch {
             try {
-                val instance =
-                    scene.modelLoader.loadModelInstance(location)
+                val renderPath = if (skinColor == 0) location else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    SakuraSkinFiles.modelPath(appContext, fileName, skinColor)
+                }
+                if (expected != generation || expectedModel != modelGeneration || sceneView !== scene) return@launch
+                val instance = scene.modelLoader.loadModelInstance(renderPath)
 
                 if (
                     expected != generation ||
@@ -813,11 +823,12 @@ class CameraFragment : Fragment() {
         attackButton?.isEnabled = ready && profile != null && hp > 0 && !captured
         captureButton?.isEnabled = ready && (profile == null || (hp == 0 && !captured))
         val portal = sharedViewModel.portal.value ?: "Exploração livre"
+        val weapon = context?.let { SakuraProgress(it) }
         battleText?.text = if (profile == null) {
             "$portal\nObjeto não capturável: tentar capturar custa uma vida."
         } else {
             val status = if (captured) "Capturado" else "HP: $hp/${profile.maxHp}"
-            "$portal\n${profile.name} • ${profile.rarity} • $status"
+            "$portal\n${profile.name} • ${profile.rarity} • $status\n${weapon?.equipped(true)?.name ?: "Katana"} • Dano: ${weapon?.damage ?: 25}"
         }
     }
 
@@ -827,6 +838,9 @@ class CameraFragment : Fragment() {
         val scene = sceneView ?: return
         if (mode == Mode.AR && anchorNode == null) return
         val file = currentModelFile
+        val appContext = requireContext().applicationContext
+        val progress = SakuraProgress(appContext)
+        val weaponColor = progress.equipped(true).color
         if (SakuraRules.profile(file) == null || sharedViewModel.foiCapturado(file) ||
             (sharedViewModel.dragonHp.value ?: 0) <= 0) return
 
@@ -835,7 +849,11 @@ class CameraFragment : Fragment() {
         attackJob = viewLifecycleOwner.lifecycleScope.launch {
             try {
                 // Usa o modelo de katana já presente no projeto.
-                val instance = scene.modelLoader.loadModelInstance("katana.glb")
+                val weaponPath = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    SakuraSkinFiles.modelPath(appContext, "katana.glb", weaponColor)
+                }
+                if (modelNode !== dragon || sceneView !== scene || sharedViewModel.jogoEncerrado) return@launch
+                val instance = scene.modelLoader.loadModelInstance(weaponPath)
                 if (modelNode !== dragon || sceneView !== scene || sharedViewModel.jogoEncerrado) return@launch
                 if (instance != null) {
                     val sword = ModelNode(
@@ -859,7 +877,7 @@ class CameraFragment : Fragment() {
                     delay(250L)
                 }
                 if (modelNode === dragon && currentModelFile == file) {
-                    sharedViewModel.atacarDragao(file)
+                    if (sharedViewModel.atacarDragao(file, progress.damage)) progress.event("attacks")
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -867,7 +885,7 @@ class CameraFragment : Fragment() {
                 // O combate continua mesmo se o efeito 3D falhar.
                 if (modelNode === dragon && currentModelFile == file && !sharedViewModel.jogoEncerrado) {
                     playAttackSound()
-                    sharedViewModel.atacarDragao(file)
+                    if (sharedViewModel.atacarDragao(file, progress.damage)) progress.event("attacks")
                 }
             } finally {
                 removeSword()
@@ -929,6 +947,7 @@ class CameraFragment : Fragment() {
 
         if (!sharedViewModel.registrarCaptura(currentModelFile)) return
 
+        SakuraProgress(requireContext()).event("captures")
         val firstCapture = capturedModels.add(currentModelFile)
         if (firstCapture) {
             preferences.edit()
