@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
+import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -69,6 +70,12 @@ class CameraFragment : Fragment() {
     private var container: FrameLayout? = null
     private var placeButton: ExtendedFloatingActionButton? = null
     private var captureButton: ExtendedFloatingActionButton? = null
+    private var attackButton: ExtendedFloatingActionButton? = null
+    private var battleText: TextView? = null
+    private var attackJob: Job? = null
+    private var swordNode: ModelNode? = null
+    private var swordParent: ModelNode? = null
+    private var attackSound: MediaPlayer? = null
     private var statusText: TextView? = null
     private var overlay: View? = null
 
@@ -132,6 +139,7 @@ class CameraFragment : Fragment() {
         container = view.findViewById(R.id.sceneContainer)
         placeButton = view.findViewById(R.id.place)
         captureButton = view.findViewById(R.id.capture)
+        attackButton = view.findViewById(R.id.attack)
 
         createControls()
 
@@ -149,6 +157,7 @@ class CameraFragment : Fragment() {
             textoPontos.text = "Pontos: $pontos"
         }
         captureButton?.setOnClickListener { captureDragon() }
+        attackButton?.setOnClickListener { attackDragon() }
 
         val selectedModel = sharedViewModel.selectedModel.value
 
@@ -164,6 +173,10 @@ class CameraFragment : Fragment() {
                 loadModel()
             }
         }
+
+        sharedViewModel.dragonHp.observe(viewLifecycleOwner) { updateBattleControls() }
+        sharedViewModel.portal.observe(viewLifecycleOwner) { updateBattleControls() }
+        updateBattleControls()
 
         placeButton?.setOnClickListener {
             if (sharedViewModel.jogoEncerrado) return@setOnClickListener
@@ -183,14 +196,17 @@ class CameraFragment : Fragment() {
 
         val parent = container?.parent as? ViewGroup
         if (parent != null) {
-            localizacaoController.conectar(parent) { arquivo ->
+            localizacaoController.conectar(parent) { arquivo, portal ->
                 if (!sharedViewModel.jogoEncerrado) {
-                    sharedViewModel.selectModel(arquivo)
-                    sharedViewModel.registrarEncontro(arquivo)
+                    cancelAttack()
+                    sharedViewModel.iniciarEncontro(arquivo, portal)
+                    updateBattleControls()
+                    Toast.makeText(requireContext(), "$portal: novo encontro!", Toast.LENGTH_SHORT).show()
                 }
             }
             placeButton?.bringToFront()
             captureButton?.bringToFront()
+        attackButton?.bringToFront()
             parent.findViewById<View>(R.id.titleImage)?.bringToFront()
             parent.findViewById<View>(R.id.textVidas)?.bringToFront()
             parent.findViewById<View>(R.id.textRegra)?.bringToFront()
@@ -216,6 +232,11 @@ class CameraFragment : Fragment() {
         }
 
         panel.addView(statusText)
+        battleText = TextView(requireContext()).apply {
+            textSize = 14f
+            setTextColor(Color.WHITE)
+        }
+        panel.addView(battleText)
 
         layer.addView(
             panel,
@@ -243,6 +264,7 @@ class CameraFragment : Fragment() {
         parent.findViewById<View>(R.id.titleImage)?.bringToFront()
         placeButton?.bringToFront()
         captureButton?.bringToFront()
+        attackButton?.bringToFront()
         parent.findViewById<View>(R.id.textVidas)?.bringToFront()
         parent.findViewById<View>(R.id.textRegra)?.bringToFront()
     }
@@ -726,7 +748,7 @@ class CameraFragment : Fragment() {
                 if (!isAr) {
                     scene.addChildNode(node)
                     placeButton?.isEnabled = true
-                    captureButton?.isEnabled = true
+                    updateBattleControls()
                 }
 
             } catch (e: CancellationException) {
@@ -766,7 +788,7 @@ class CameraFragment : Fragment() {
 
             anchorNode = anchor
             placementHit = null
-            captureButton?.isEnabled = true
+            updateBattleControls()
 
             placeButton?.apply {
                 text = "Reposicionar"
@@ -781,14 +803,119 @@ class CameraFragment : Fragment() {
         }
     }
 
+    private fun updateBattleControls() {
+        if (!::sharedViewModel.isInitialized) return
+        val profile = SakuraRules.profile(currentModelFile)
+        val hp = sharedViewModel.dragonHp.value ?: 0
+        val captured = sharedViewModel.foiCapturado(currentModelFile)
+        val ready = !sharedViewModel.jogoEncerrado && modelNode != null &&
+            (mode != Mode.AR || anchorNode != null) && attackJob?.isActive != true
+        attackButton?.isEnabled = ready && profile != null && hp > 0 && !captured
+        captureButton?.isEnabled = ready && (profile == null || (hp == 0 && !captured))
+        val portal = sharedViewModel.portal.value ?: "Exploração livre"
+        battleText?.text = if (profile == null) {
+            "$portal\nObjeto não capturável: tentar capturar custa uma vida."
+        } else {
+            val status = if (captured) "Capturado" else "HP: $hp/${profile.maxHp}"
+            "$portal\n${profile.name} • ${profile.rarity} • $status"
+        }
+    }
+
+    private fun attackDragon() {
+        if (sharedViewModel.jogoEncerrado || attackJob?.isActive == true) return
+        val dragon = modelNode ?: return
+        val scene = sceneView ?: return
+        if (mode == Mode.AR && anchorNode == null) return
+        val file = currentModelFile
+        if (SakuraRules.profile(file) == null || sharedViewModel.foiCapturado(file) ||
+            (sharedViewModel.dragonHp.value ?: 0) <= 0) return
+
+        attackButton?.isEnabled = false
+        captureButton?.isEnabled = false
+        attackJob = viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                // Usa o modelo de katana já presente no projeto.
+                val instance = scene.modelLoader.loadModelInstance("katana.glb")
+                if (modelNode !== dragon || sceneView !== scene || sharedViewModel.jogoEncerrado) return@launch
+                if (instance != null) {
+                    val sword = ModelNode(
+                        modelInstance = instance,
+                        scaleToUnits = 0.55f,
+                        centerOrigin = Position(0f, 0f, 0f)
+                    )
+                    sword.isEditable = false
+                    swordNode = sword
+                    swordParent = dragon
+                    sword.position = Position(0.7f, 0.45f, 0.15f)
+                    dragon.addChildNode(sword)
+                    playAttackSound()
+                    repeat(10) { step ->
+                        val progress = (step + 1) / 10f
+                        sword.position = Position(0.7f - 1.4f * progress, 0.45f - 0.4f * progress, 0.15f)
+                        delay(25L)
+                    }
+                } else {
+                    playAttackSound()
+                    delay(250L)
+                }
+                if (modelNode === dragon && currentModelFile == file) {
+                    sharedViewModel.atacarDragao(file)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // O combate continua mesmo se o efeito 3D falhar.
+                if (modelNode === dragon && currentModelFile == file && !sharedViewModel.jogoEncerrado) {
+                    playAttackSound()
+                    sharedViewModel.atacarDragao(file)
+                }
+            } finally {
+                removeSword()
+                attackJob = null
+                updateBattleControls()
+            }
+        }
+    }
+
+    private fun playAttackSound() {
+        runCatching {
+            attackSound?.release()
+            attackSound = MediaPlayer.create(requireContext(), R.raw.katana)?.apply {
+                setOnCompletionListener { player ->
+                    if (attackSound === player) attackSound = null
+                    player.release()
+                }
+                start()
+            }
+        }
+    }
+
+    private fun removeSword() {
+        val sword = swordNode
+        if (sword != null) {
+            runCatching { swordParent?.removeChildNode(sword) }
+            runCatching { sword.destroy() }
+        }
+        swordNode = null
+        swordParent = null
+    }
+
+    private fun cancelAttack() {
+        attackJob?.cancel()
+        attackJob = null
+        removeSword()
+        runCatching { attackSound?.release() }
+        attackSound = null
+    }
+
     private fun captureDragon() {
         if (sharedViewModel.jogoEncerrado || modelNode == null) return
         if (mode == Mode.AR && anchorNode == null) return
 
-        val normalizedName = currentModelFile.substringAfterLast("/").substringBefore("?").lowercase()
-        val isDragon = normalizedName.contains("dragao") || normalizedName.contains("dragon")
+        if (attackJob?.isActive == true) return
+        val profile = SakuraRules.profile(currentModelFile)
 
-        if (!isDragon) {
+        if (profile == null) {
             perderVida()
             return
         }
@@ -800,13 +927,19 @@ class CameraFragment : Fragment() {
             .getStringSet("captured_models", emptySet<String>())
             .orEmpty().toMutableSet()
 
-        if (!capturedModels.add(currentModelFile)) {
-            Toast.makeText(requireContext(), "Este dragão já está na sua coleção!", Toast.LENGTH_SHORT).show()
-            return
-        }
+        if (!sharedViewModel.registrarCaptura(currentModelFile)) return
 
-        preferences.edit().putStringSet("captured_models", capturedModels).apply()
-        Toast.makeText(requireContext(), "Dragão capturado! Ele foi adicionado ao seu bestiário.", Toast.LENGTH_SHORT).show()
+        val firstCapture = capturedModels.add(currentModelFile)
+        if (firstCapture) {
+            preferences.edit()
+                .putStringSet("captured_models", capturedModels)
+                .putString("capture_place:$currentModelFile", sharedViewModel.portal.value ?: "Exploração livre")
+                .apply()
+        }
+        updateBattleControls()
+        val message = if (firstCapture) "Dragão capturado! Adicionado ao bestiário."
+            else "Dragão capturado nesta partida! Já consta no bestiário."
+        Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show()
     }
 
     private fun perderVida() {
@@ -826,6 +959,8 @@ class CameraFragment : Fragment() {
         availabilityJob?.cancel()
         availabilityJob = null
         modelNode?.isEditable = false
+        cancelAttack()
+        attackButton?.isEnabled = false
         localizacaoController.encerrarPartida()
         (activity as? MainActivity)?.pararSomDaPartida()
 
@@ -862,6 +997,8 @@ class CameraFragment : Fragment() {
     }
 
     private fun removeModel() {
+        cancelAttack()
+        attackButton?.isEnabled = false
         captureButton?.isEnabled = false
         val scene = sceneView
 
@@ -954,6 +1091,8 @@ class CameraFragment : Fragment() {
         statusText = null
         placeButton = null
         captureButton = null
+        attackButton = null
+        battleText = null
         container = null
 
         pendingAr = false

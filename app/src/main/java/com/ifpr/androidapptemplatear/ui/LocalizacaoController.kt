@@ -40,7 +40,10 @@ class LocalizacaoController(
 
     private data class Lugar(
         val latitude: Double,
-        val longitude: Double
+        val longitude: Double,
+        val nome: String,
+        val lendario: Int,
+        val comum: Int
     )
 
     companion object {
@@ -62,26 +65,26 @@ class LocalizacaoController(
         // Catedral Sant'Ana
         Lugar(
             latitude = -25.09821,
-            longitude = -50.15895
+            longitude = -50.15895, nome = "Portal da Catedral", lendario = 0, comum = 80
         ),
 
         // Igreja dos Polacos
         Lugar(
             latitude = -25.094904,
-            longitude = -50.163075
+            longitude = -50.163075, nome = "Portal dos Polacos", lendario = 5, comum = 65
         ),
 
         // Parque Estadual de Vila Velha
         Lugar(
             latitude = -25.246243,
-            longitude = -50.021782
+            longitude = -50.021782, nome = "Portal de Vila Velha", lendario = 15, comum = 65
         ),
 
         // Estação Saudade (OpenStreetMap 4287261390)
-        Lugar(latitude = -25.09338, longitude = -50.15326),
+        Lugar(latitude = -25.09338, longitude = -50.15326, nome = "Portal da Saudade", lendario = 10, comum = 60),
 
         // Estação Paraná / Casa da Memória (OpenStreetMap 546721749)
-        Lugar(latitude = -25.09567, longitude = -50.15552)
+        Lugar(latitude = -25.09567, longitude = -50.15552, nome = "Portal da Memória", lendario = 0, comum = 60)
     )
 
     private var manager: LocationManager? = null
@@ -91,7 +94,7 @@ class LocalizacaoController(
     private var enderecoView: TextView? = null
     private var botao: Button? = null
 
-    private var aoEncontrarModelo: ((String) -> Unit)? = null
+    private var aoEncontrarModelo: ((String, String) -> Unit)? = null
 
     private var modelos: List<String> = emptyList()
     private var lugarAtual: Lugar? = null
@@ -123,7 +126,7 @@ class LocalizacaoController(
 
     fun conectar(
         parent: ViewGroup,
-        aoEncontrar: (String) -> Unit
+        aoEncontrar: (String, String) -> Unit
     ) {
         check(owner == null) {
             "O controlador já está conectado a uma tela."
@@ -433,8 +436,9 @@ class LocalizacaoController(
 
         lugarAtual = lugarEncontrado
 
-        // Não exibe mensagens sobre o objeto ou o local.
-        aoEncontrarModelo?.invoke(modelos.random())
+        val arquivo = SakuraRules.encounter(modelos, lugarEncontrado.lendario, lugarEncontrado.comum)
+            ?: return
+        aoEncontrarModelo?.invoke(arquivo, lugarEncontrado.nome)
     }
 
     private fun distancia(

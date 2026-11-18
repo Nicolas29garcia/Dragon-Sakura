@@ -75,8 +75,15 @@ class CollectionFragment : Fragment() {
                 .replace("_", " ")
                 .replaceFirstChar { it.uppercase() }
 
+            val profile = SakuraRules.profile(fileName)
+            val place = preferences.getString("capture_place:$fileName", null)
+                ?: "Local não registrado"
             val item = TextView(requireContext()).apply {
-                text = "🐉  $dragonName\n\nArquivo: $fileName"
+                text = if (profile != null) {
+                    "🐉  ${profile.name}\n\nRaridade: ${profile.rarity}\nElemento: ${profile.element}\n${profile.description}\n\nPrimeira captura: $place"
+                } else {
+                    "🐉  $dragonName\n\nArquivo: $fileName\nPrimeira captura: $place"
+                }
                 textSize = 17f
                 setTextColor(Color.WHITE)
                 setPadding(16, 20, 16, 20)
